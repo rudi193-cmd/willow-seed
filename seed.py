@@ -3,10 +3,13 @@
 seed.py — Willow Bootstrap
 Plant this. Everything grows from here.
 
-Usage:   python seed.py
+Usage:
+  python seed.py                          # auto-detect or prompt for location
+  python seed.py --target /path/to/dir   # skip detection, install here
 Requires: Python 3.11+, stdlib only.
 """
 
+import argparse
 import json
 import os
 import platform
@@ -142,8 +145,20 @@ def clone_willow(target: Path) -> bool:
     return True
 
 
-def step_get_willow() -> Path | None:
+def step_get_willow(forced_target: Path | None = None) -> Path | None:
     hdr("Step 1 — Get Willow")
+
+    # --target bypasses detection entirely
+    if forced_target is not None:
+        if (forced_target / "willow.sh").exists():
+            ok(f"Using existing installation: {forced_target}")
+            return forced_target
+        if forced_target.exists():
+            err(f"Directory exists but doesn't look like willow-1.7: {forced_target}")
+            return None
+        if not consent(f"clone Willow from GitHub into {forced_target}"):
+            return None
+        return forced_target if clone_willow(forced_target) else None
 
     existing = find_local_repo()
     if existing:
@@ -417,7 +432,7 @@ def summary(willow_path: Path):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main(forced_target: Path | None = None):
     print()
     print("  Willow")
     print("  Plant this. Everything grows from here.")
@@ -449,7 +464,7 @@ def main():
         info("Install:  https://www.postgresql.org/download/")
 
     # Step 1: Get Willow
-    willow_path = step_get_willow()
+    willow_path = step_get_willow(forced_target)
     if willow_path is None:
         print("\n  Nothing installed. Goodbye.")
         sys.exit(0)
@@ -484,4 +499,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Willow bootstrap installer")
+    parser.add_argument(
+        "--target",
+        type=Path,
+        default=None,
+        help="Install path. Bypasses auto-detection. Use this when planting on a specific partition.",
+    )
+    args = parser.parse_args()
+    main(args.target)
