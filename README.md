@@ -1,7 +1,5 @@
 # Willow Seed
 
-**Status: BETA -- Not ready for general use yet.**
-
 > Plant this. Everything grows from here.
 
 ---
@@ -121,23 +119,38 @@ It grows into something that respects you.
 
 ---
 
+## Plant It
+
+```bash
+python seed.py
+```
+
+No dependencies required. Stdlib only. Consent gates before every action.
+
+See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the manual path and app development guide.
+
+---
+
 ## Technical Details
 
 For developers who want to understand what's under the hood:
 
-**Three-ring architecture:**
-- **Source ring** — your data, your machine, your canon
-- **Bridge ring** — how nodes talk to each other (when you want them to)
-- **Continuity ring** — governance. What the AI is and is not allowed to do.
+**Portless MCP server.** Willow runs as a stdio subprocess that Claude Code connects to directly. No HTTP. No exposed ports. No supervisor. The server (`sap/sap_mcp.py`) exposes 44 tools for knowledge, inference, task dispatch, and file intake.
 
-A fresh node starts with source ring only. Everything else is earned.
+**SAFE authorization.** Every agent holds a signed folder on disk. The SAP gate checks: folder exists → manifest present → `.sig` present → `gpg --verify` passes. Any failure → deny + log. Revoke an agent by deleting its folder. The filesystem is the ACL.
+
+**Two storage layers.**
+- *SOIL* — SQLite per collection. Local, always available, no dependencies.
+- *LOAM* — Postgres via Unix socket. Knowledge graph: atoms, entities, edges.
+
+**Dual Commit governance.** AI proposes, human ratifies. Nothing writes to the knowledge graph without explicit approval. Authorization is checked on every call — not cached, not assumed.
+
+**Free fleet fallback.** When local models (Ollama) are unavailable, inference routes to Groq → Cerebras → SambaNova using keys from `credentials.json`. All three offer free tiers.
 
 **Related projects:**
-- [SAFE protocol](https://github.com/rudi193-cmd/SAFE) — the legal and technical framework for user data sovereignty
-- [NASA Archive](https://github.com/rudi193-cmd/nasa-archive) — first production Willow app
-- [UTETY Chat](https://github.com/rudi193-cmd/safe-app-utety-chat) — AI faculty system
-
-**Status:** BETA. Come back when the journal is ready.
+- [willow-1.7](https://github.com/rudi193-cmd/willow-1.7) — the MCP server this seed plants
+- [SAFE](https://github.com/rudi193-cmd/SAFE) — the consent and authorization framework
+- [safe-app-utety-chat](https://github.com/rudi193-cmd/safe-app-utety-chat) — AI faculty system (17 professors)
 
 ---
 

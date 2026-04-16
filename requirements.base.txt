@@ -1,3 +1,20 @@
-# SAFE App Base Dependencies
-# Add these to your requirements.txt
-safe-protocol>=2.0.0
+# Willow 1.7 — base Python dependencies
+# Install into your venv: pip install -r requirements.base.txt
+#
+# System prerequisites (not pip):
+#   - Python 3.11+
+#   - PostgreSQL 14+  (unix socket peer auth)
+#   - gpg             (for SAFE manifest signing and verification)
+#   - Ollama          (optional — https://ollama.ai)
+
+# MCP SDK — required for the stdio server
+mcp>=1.0.0
+
+# Postgres bridge (LOAM knowledge graph)
+psycopg2-binary>=2.9.0
+
+# HTTP client — Ollama HTTP fallback + free fleet (Groq/Cerebras/SambaNova)
+requests>=2.31.0
+
+# Ollama Python client (optional — falls back to requests if absent)
+ollama>=0.1.0

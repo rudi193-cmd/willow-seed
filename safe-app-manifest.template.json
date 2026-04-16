@@ -1,25 +1,25 @@
 {
+  "_comment": "Copy to safe-app-manifest.json, fill in your values, then sign: gpg --detach-sign safe-app-manifest.json",
   "app_id": "your-app-id",
   "name": "Your App Name",
-  "version": "0.1.0",
-  "safe_version": ">=2.0.0",
+  "version": "1.0.0",
+  "safe_version": ">=2.1.0",
+  "b17": "XXXXX",
   "description": "One sentence description of what this app does.",
   "author": "Your Name",
+  "agent_type": "worker",
   "data_streams": [
     {
-      "id": "primary_data",
-      "purpose": "Describe what this data is used for",
-      "retention": "session",
-      "description": "Deleted when session ends"
+      "id": "knowledge",
+      "purpose": "KB context assembly via SAP",
+      "retention": "session"
     }
   ],
   "permissions": [
     "local_llm",
-    "file_read"
+    "cloud_llm_free",
+    "willow_kb_read"
   ],
   "privacy_tier": "client_only",
-  "local_processing": 0.96,
-  "entry_point": "your_module.main:app",
-  "license": "MIT",
-  "repository": "https://github.com/seancampbell3161/safe-app-your-app-id"
+  "local_processing": 1.0
 }
