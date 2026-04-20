@@ -324,10 +324,7 @@ def step_safe(willow_path: Path) -> str | None:
 
     # Co-locate SAFE with the Willow partition if installing there,
     # otherwise fall back to the canonical partition default.
-    if str(willow_path).startswith("/media/willow"):
-        partition_safe = "/media/willow/SAFE/Applications"
-    else:
-        partition_safe = "/media/willow/SAFE/Applications"  # canonical default
+    partition_safe = str(Path.home() / "SAFE" / "Applications")
     safe_root = os.environ.get("WILLOW_SAFE_ROOT", partition_safe)
 
     info("The SAFE root is where signed app manifests live.")
