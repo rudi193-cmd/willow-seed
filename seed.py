@@ -322,8 +322,13 @@ def step_safe(willow_path: Path) -> str | None:
     """Create the SAFE root directory. Returns safe_root path on success, None on skip."""
     hdr("Step 5 — SAFE authorization")
 
-    default_safe_root = str(Path.home() / "SAFE" / "Applications")
-    safe_root = os.environ.get("WILLOW_SAFE_ROOT", default_safe_root)
+    # Co-locate SAFE with the Willow partition if installing there,
+    # otherwise fall back to the canonical partition default.
+    if str(willow_path).startswith("/media/willow"):
+        partition_safe = "/media/willow/SAFE/Applications"
+    else:
+        partition_safe = "/media/willow/SAFE/Applications"  # canonical default
+    safe_root = os.environ.get("WILLOW_SAFE_ROOT", partition_safe)
 
     info("The SAFE root is where signed app manifests live.")
     info(f"Default location: {safe_root}")
