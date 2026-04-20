@@ -318,90 +318,101 @@ def step_credentials(willow_path: Path):
 
 # ── Step 5: SAFE ──────────────────────────────────────────────────────────────
 
-def step_safe(willow_path: Path) -> bool:
+def step_safe(willow_path: Path) -> str | None:
+    """Create the SAFE root directory. Returns safe_root path on success, None on skip."""
     hdr("Step 5 — SAFE authorization")
 
-    safe_root = os.environ.get("WILLOW_SAFE_ROOT", "/media/willow/SAFE/Applications")
+    default_safe_root = str(Path.home() / "SAFE" / "Applications")
+    safe_root = os.environ.get("WILLOW_SAFE_ROOT", default_safe_root)
 
-    info("Each agent needs a signed manifest folder to pass the authorization gate.")
-    info(f"SAFE root: {safe_root}")
+    info("The SAFE root is where signed app manifests live.")
+    info(f"Default location: {safe_root}")
     print()
 
     if not shutil.which("gpg"):
         warn("gpg not found. Install it: sudo apt install gnupg")
-        info("After installing gpg and creating a key, run:")
-        info(f"  {willow_path}/tools/safe-scaffold.sh Willow operator 'Willow core node'")
-        return False
+        info("After installing gpg and creating a key, re-run seed.py.")
+        return None
 
     key = check_gpg_key()
     if not key:
         warn("No GPG secret key found in your keyring.")
         info("Create one:  gpg --full-generate-key")
-        info("Then run:    " + str(willow_path / "tools" / "safe-scaffold.sh") +
-             " Willow operator 'Willow core node'")
-        return False
+        info("Then re-run seed.py.")
+        return None
 
     ok(f"GPG key: {key}")
 
-    if not Path(safe_root).exists():
-        warn(f"SAFE root does not exist: {safe_root}")
-        info("Create it or set WILLOW_SAFE_ROOT to an existing path.")
-        info("If using a mounted drive: mount it first, then re-run this step.")
-        info("Or create the directory:  mkdir -p " + safe_root)
-        return False
+    safe_path = Path(safe_root)
+    if not safe_path.exists():
+        if not consent(f"create SAFE root at {safe_root}"):
+            warn("Skipped. Set WILLOW_SAFE_ROOT and re-run.")
+            return None
+        safe_path.mkdir(parents=True, exist_ok=True)
+        ok(f"Created: {safe_root}")
+    else:
+        ok(f"SAFE root exists: {safe_root}")
 
     scaffold = willow_path / "tools" / "safe-scaffold.sh"
     if not scaffold.exists():
         warn(f"safe-scaffold.sh not found at {scaffold}")
-        return False
+        return None
 
-    if not consent("scaffold a 'Willow' SAFE entry (folder + manifest + GPG signature)"):
-        warn("Skipped. Run manually:")
-        info(f"  {scaffold} Willow operator 'Willow core node'")
-        return False
-
-    result = subprocess.run(
-        ["bash", str(scaffold), "Willow", "operator", "Willow core node"],
-        env={**os.environ, "WILLOW_SAFE_ROOT": safe_root}
-    )
-    if result.returncode != 0:
-        err("Scaffold failed. Check gpg key and SAFE root path.")
-        return False
-    ok("Willow SAFE entry created")
-    return True
+    ok("SAFE root ready")
+    return safe_root
 
 
 # ── Step 6: Claude Code MCP config ───────────────────────────────────────────
 
-def step_mcp(willow_path: Path):
-    hdr("Step 6 — Claude Code")
+def step_mcp(willow_path: Path, safe_root: str | None):
+    hdr("Step 6 — Claude Code MCP")
 
-    venv_python = VENV_PATH / "bin" / "python3"
-    python_path = str(venv_python) if venv_python.exists() else sys.executable
+    # Prefer the pipx-installed willow-mcp binary; fall back to willow.sh
+    willow_mcp_bin = shutil.which("willow-mcp") or str(
+        Path.home() / ".local" / "bin" / "willow-mcp"
+    )
+
+    # Install willow-mcp if not present
+    if not shutil.which("willow-mcp"):
+        info("willow-mcp not found. Attempting install via pipx...")
+        if shutil.which("pipx"):
+            result = subprocess.run(["pipx", "install", "willow-mcp"], capture_output=True, text=True)
+            if result.returncode == 0:
+                ok("Installed willow-mcp via pipx")
+                willow_mcp_bin = shutil.which("willow-mcp") or willow_mcp_bin
+            else:
+                warn("pipx install failed. Falling back to willow.sh.")
+                willow_mcp_bin = str(willow_path / "willow.sh")
+        else:
+            warn("pipx not found. Falling back to willow.sh.")
+            willow_mcp_bin = str(willow_path / "willow.sh")
+
+    store_root = str(Path.home() / ".willow" / "store")
+    mcp_env = {
+        "WILLOW_STORE_ROOT": store_root,
+    }
+    if safe_root:
+        mcp_env["SAP_SAFE_ROOT"] = safe_root
+        key = check_gpg_key()
+        if key:
+            mcp_env["SAP_PGP_FINGERPRINT"] = key
 
     mcp_entry = {
         "willow": {
-            "command": str(willow_path / "willow.sh"),
-            "type": "stdio",
-            "env": {
-                "WILLOW_PYTHON": python_path
-            }
+            "command": willow_mcp_bin,
+            "env": mcp_env,
         }
     }
 
-    mcp_json_path = Path.home() / ".claude" / "claude.json"
     project_mcp_path = willow_path / ".mcp.json"
 
     print()
-    info("Add the following to your Claude Code MCP configuration.")
-    info(f"Project-level (.mcp.json in any project):  {project_mcp_path}")
-    info(f"Or global config: {mcp_json_path}")
+    info(f"MCP server: {willow_mcp_bin}")
+    info(f"Store root: {store_root}")
+    if safe_root:
+        info(f"SAFE root:  {safe_root}")
     print()
-    print('  {')
-    print('    "mcpServers": ' + json.dumps(mcp_entry, indent=4).replace("\n", "\n    "))
-    print('  }')
 
-    # Try to write a project-level .mcp.json in the willow-1.7 repo itself
     if not project_mcp_path.exists():
         if consent(f"write .mcp.json to {project_mcp_path}"):
             project_mcp_path.write_text(
@@ -410,6 +421,47 @@ def step_mcp(willow_path: Path):
             ok(f"Written: {project_mcp_path}")
     else:
         ok(f".mcp.json exists: {project_mcp_path}")
+
+    # Print snippet for other projects
+    print()
+    info("Use the same .mcp.json in any project repo to connect to Willow:")
+    print(json.dumps({"mcpServers": mcp_entry}, indent=2))
+
+
+# ── Step 7: SAFE app registration ────────────────────────────────────────────
+
+def step_register_apps(willow_path: Path, safe_root: str):
+    hdr("Step 7 — Register system apps")
+
+    scaffold = willow_path / "tools" / "safe-scaffold.sh"
+    if not scaffold.exists():
+        warn(f"safe-scaffold.sh not found — skipping app registration")
+        return
+
+    # Core system entries every install needs
+    apps = [
+        ("willow",           "operator", "Willow core system node"),
+        ("heimdallr",        "operator", "Watchman — Claude Code CLI in willow-1.7"),
+        ("willow-dashboard", "operator", "Terminal dashboard — system entry point"),
+    ]
+
+    env = {**os.environ, "WILLOW_SAFE_ROOT": safe_root}
+
+    for app_id, agent_type, description in apps:
+        app_dir = Path(safe_root) / app_id
+        if app_dir.exists():
+            ok(f"Already registered: {app_id}")
+            continue
+        result = subprocess.run(
+            ["bash", str(scaffold), app_id, agent_type, description],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            ok(f"Registered: {app_id}")
+        else:
+            err(f"Failed to register {app_id}: {result.stderr.strip()[:100]}")
 
 
 # ── Summary ───────────────────────────────────────────────────────────────────
@@ -421,12 +473,15 @@ def summary(willow_path: Path):
     print("  Willow is planted.  ΔΣ=42")
     print()
     print("  Next:")
-    print(f"    ./willow.sh status    (health check)")
-    print(f"    ./willow.sh verify    (SAFE manifest audit)")
-    print(f"    ./willow.sh           (start MCP server)")
+    print(f"    ./willow.sh status       (health check)")
+    print(f"    ./willow.sh verify       (SAFE manifest audit)")
+    print(f"    ./willow.sh              (start MCP server)")
     print()
-    print("  Open any project in Claude Code.")
-    print("  Willow connects automatically when Claude Code starts.")
+    print("  Then launch the dashboard:")
+    print(f"    cd ~/github/willow-dashboard")
+    print(f"    python3 dashboard.py")
+    print()
+    print("  Install apps from the dashboard — no manual setup needed.")
     print()
 
 
@@ -484,15 +539,23 @@ def main(forced_target: Path | None = None):
     step_credentials(willow_path)
 
     # Step 5: SAFE
+    safe_root = None
     if has_gpg:
-        step_safe(willow_path)
+        safe_root = step_safe(willow_path)
     else:
         hdr("Step 5 — SAFE authorization")
         warn("Skipped (gpg not found)")
-        info(f"After installing gpg:  {willow_path}/tools/safe-scaffold.sh Willow operator 'Willow core node'")
+        info("Install gpg then re-run seed.py to create the SAFE root.")
 
-    # Step 6: Claude Code
-    step_mcp(willow_path)
+    # Step 6: Claude Code MCP
+    step_mcp(willow_path, safe_root)
+
+    # Step 7: Register system apps
+    if safe_root:
+        step_register_apps(willow_path, safe_root)
+    else:
+        hdr("Step 7 — Register system apps")
+        warn("Skipped (no SAFE root)")
 
     # Summary
     summary(willow_path)
