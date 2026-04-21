@@ -95,6 +95,27 @@ def check_gpg_key():
     return None
 
 
+def write_pgp_to_profile(fingerprint: str):
+    """Append export SAP_PGP_FINGERPRINT to ~/.bashrc and ~/.zshrc if not already present."""
+    marker = f"export SAP_PGP_FINGERPRINT={fingerprint}"
+    profiles = [Path.home() / ".bashrc", Path.home() / ".zshrc"]
+    written = []
+    for p in profiles:
+        if not p.exists():
+            continue
+        existing = p.read_text()
+        if "SAP_PGP_FINGERPRINT" in existing:
+            continue
+        with p.open("a") as f:
+            f.write(f"\n# Willow PGP gate — set by seed.py\n{marker}\n")
+        written.append(str(p))
+    if written:
+        ok(f"SAP_PGP_FINGERPRINT written to: {', '.join(written)}")
+        info("Run:  source ~/.bashrc   (or open a new terminal)")
+    else:
+        ok("SAP_PGP_FINGERPRINT already in shell profile")
+
+
 def check_postgres():
     """Return True if psql can connect to the local socket."""
     try:
@@ -468,23 +489,41 @@ def step_register_apps(willow_path: Path, safe_root: str):
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
+def find_dashboard_py(willow_path: Path) -> Path | None:
+    """Find dashboard.py — check sibling willow-dashboard repo first, then willow_path."""
+    candidates = [
+        willow_path.parent / "willow-dashboard" / "dashboard.py",
+        willow_path / "willow-dashboard" / "dashboard.py",
+        Path.home() / "github" / "willow-dashboard" / "dashboard.py",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
 def summary(willow_path: Path):
     print()
     print("─" * 56)
     print()
     print("  Willow is planted.  ΔΣ=42")
     print()
-    print("  Next:")
-    print(f"    ./willow.sh status       (health check)")
-    print(f"    ./willow.sh verify       (SAFE manifest audit)")
-    print(f"    ./willow.sh              (start MCP server)")
-    print()
-    print("  Then launch the dashboard:")
-    print(f"    cd ~/github/willow-dashboard")
-    print(f"    python3 dashboard.py")
-    print()
-    print("  Install apps from the dashboard — no manual setup needed.")
-    print()
+
+    dashboard = find_dashboard_py(willow_path)
+    if dashboard:
+        print("  Handing off to the dashboard...")
+        print()
+        try:
+            input("  Press Enter to continue to onboarding, or Ctrl-C to stop.")
+        except (KeyboardInterrupt, EOFError):
+            print("\n  Stopped. Run when ready:")
+            print(f"    python3 {dashboard}")
+            return
+        os.execv(sys.executable, [sys.executable, str(dashboard)])
+    else:
+        print("  willow-dashboard not found. Launch manually:")
+        print(f"    cd ~/github/willow-dashboard && python3 dashboard.py")
+        print()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -548,6 +587,12 @@ def main(forced_target: Path | None = None):
         hdr("Step 5 — SAFE authorization")
         warn("Skipped (gpg not found)")
         info("Install gpg then re-run seed.py to create the SAFE root.")
+
+    # Write SAP_PGP_FINGERPRINT to shell profile so it persists across sessions
+    if safe_root:
+        key = check_gpg_key()
+        if key:
+            write_pgp_to_profile(key)
 
     # Step 6: Claude Code MCP
     step_mcp(willow_path, safe_root)
