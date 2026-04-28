@@ -144,7 +144,7 @@ class WillowClient:
             cur.execute(
                 """
                 SELECT b17, title, content, category
-                FROM knowledge_atoms
+                FROM knowledge
                 WHERE to_tsvector('english', coalesce(content,'') || ' ' || coalesce(title,''))
                       @@ plainto_tsquery('english', %s)
                   AND domain != 'archived'
