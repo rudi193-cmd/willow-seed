@@ -175,7 +175,7 @@ if [[ ${WITH_MCP} -eq 1 ]]; then
       "type": "stdio",
       "env": {
         "WILLOW_PYTHON": "${PYTHON}",
-        "WILLOW_PG_DB": "willow_19"
+        "WILLOW_PG_DB": "${GROVE_DB}"
       }
     }
   }
