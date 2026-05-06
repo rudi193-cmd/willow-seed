@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-WILLOW_REPO     = "https://github.com/rudi193-cmd/willow-1.9"
+WILLOW_REPO     = os.environ.get("WILLOW_REPO", "https://github.com/rudi193-cmd/willow-1.9")
 WILLOW_DIR_NAME = "willow-1.9"
 
 MIN_PYTHON = (3, 11)
